@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 测试参数 -->
+  <arg name="test_mode" default="true" description="启用测试模式"/>
+  <arg name="simulation_mode" default="false" description="启用仿真模式"/>
+  <arg name="debug_mode" default="true" description="启用调试模式"/>
+  
+  <!-- 传感器话题 -->
+  <arg name="input_gnss_fix" default="/fix"/>
+  <arg name="input_gnss_orientation" default="/autoware_orientation"/>
+  <arg name="input_imu" default="/sensing/imu/imu_data"/>
+  <arg name="input_velocity" default="/localization/gyro_odometer/twist_with_covariance"/>
+  
+  <!-- 输出话题 -->
+  <arg name="output_pose_with_covariance" default="/localization/pose_estimator/eagleye/pose_with_covariance"/>
+  <arg name="output_twist_with_covariance" default="/localization/twist_estimator/eagleye/twist_with_covariance"/>
+
+  <!-- 测试数据发布器 (仅测试模式) -->
+  <group if="$(var test_mode)">
+    <node pkg="eagleye_rt" exec="test_data_publisher" name="test_data_publisher" output="screen">
+      <param name="publish_frequency" value="10.0"/>
+      <param name="simulation_mode" value="$(var simulation_mode)"/>
+    </node>
+  </group>
+
+  <!-- Eagleye双天线GNSS定位 -->
+  <include file="$(find-pkg-share eagleye_rt)/launch/eagleye_dual_antenna_gnss.launch.xml">
+    <arg name="use_eagleye_pose" value="true"/>
+    <arg name="use_eagleye_twist" value="true"/>
+    <arg name="use_multi_antenna_mode" value="true"/>
+    <arg name="use_rtk_heading" value="true"/>
+    <arg name="input_gnss_fix" value="$(var input_gnss_fix)"/>
+    <arg name="input_gnss_orientation" value="$(var input_gnss_orientation)"/>
+    <arg name="input_imu" value="$(var input_imu)"/>
+    <arg name="input_velocity" value="$(var input_velocity)"/>
+    <arg name="output_pose_with_covariance" value="$(var output_pose_with_covariance)"/>
+    <arg name="output_twist_with_covariance" value="$(var output_twist_with_covariance)"/>
+  </include>
+
+  <!-- 调试工具 -->
+  <group if="$(var debug_mode)">
+    
+    <!-- 调试脚本 -->
+    <node pkg="eagleye_rt" exec="eagleye_debug.py" name="eagleye_debugger" output="screen">
+      <param name="debug_data_path" value="/tmp/eagleye_debug"/>
+      <param name="save_frequency" value="1.0"/>
+      <param name="plot_frequency" value="0.1"/>
+    </node>
+    
+    <!-- 话题监控 -->
+    <node pkg="rqt_topic" exec="rqt_topic" name="topic_monitor" output="screen"/>
+    
+    <!-- 位姿可视化 -->
+    <node pkg="rviz2" exec="rviz2" name="eagleye_test_rviz" output="screen">
+      <param name="config_file" value="$(find-pkg-share eagleye_rt)/config/eagleye_debug.rviz"/>
+    </node>
+    
+    <!-- 性能监控 -->
+    <node pkg="rqt_plot" exec="rqt_plot" name="performance_plot" output="screen">
+      <param name="topics" value="
+        $(var output_pose_with_covariance)/pose/position/x
+        $(var output_pose_with_covariance)/pose/position/y
+        $(var output_pose_with_covariance)/pose/position/z
+      "/>
+    </node>
+    
+  </group>
+
+  <!-- 测试验证 -->
+  <group if="$(var test_mode)">
+    <node pkg="eagleye_rt" exec="test_validator" name="test_validator" output="screen">
+      <param name="test_duration" value="60.0"/>
+      <param name="position_accuracy_threshold" value="1.0"/>
+      <param name="heading_accuracy_threshold" value="0.5"/>
+    </node>
+  </group>
+
+</launch>

@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 传感器配置参数 -->
+  <arg name="launch_driver" default="true" description="启动传感器驱动"/>
+  <arg name="sensor_model" default="sample_sensor_kit" description="传感器模型名称"/>
+  <arg name="pointcloud_container_name" default="pointcloud_container"/>
+
+  <!-- 传感器话题重映射 -->
+  <arg name="input_gnss_fix" default="/fix"/>
+  <arg name="input_gnss_orientation" default="/autoware_orientation"/>
+  <arg name="input_imu" default="/sensing/imu/imu_data"/>
+  <arg name="input_lidar" default="/sensing/lidar/concatenated/pointcloud"/>
+
+  <group>
+    <push-ros-namespace namespace="sensing">
+      
+      <!-- 传感器驱动 -->
+      <group if="$(var launch_driver)">
+        <let name="sensor_launch_pkg" value="$(find-pkg-share $(var sensor_model)_launch)"/>
+        <include file="$(var sensor_launch_pkg)/launch/sensing.launch.xml">
+          <arg name="launch_driver" value="$(var launch_driver)"/>
+          <arg name="pointcloud_container_name" value="$(var pointcloud_container_name)"/>
+        </include>
+      </group>
+
+      <!-- GNSS Poser (双天线GNSS定位) -->
+      <group>
+        <push-ros-namespace namespace="gnss">
+          <include file="$(find-pkg-share autoware_gnss_poser)/launch/gnss_poser_dual_antenna.launch.xml">
+            <arg name="input_topic_fix" value="$(var input_gnss_fix)"/>
+            <arg name="input_topic_orientation" value="$(var input_gnss_orientation)"/>
+            <arg name="output_topic_gnss_pose" value="pose"/>
+            <arg name="output_topic_gnss_pose_cov" value="pose_with_covariance"/>
+            <arg name="output_topic_gnss_fixed" value="fixed"/>
+          </include>
+        </push-ros-namespace>
+      </group>
+
+      <!-- 点云预处理 -->
+      <group>
+        <push-ros-namespace namespace="lidar">
+          <include file="$(find-pkg-share autoware_pointcloud_preprocessor)/launch/pointcloud_preprocessor.launch.xml">
+            <arg name="input_pointcloud" value="$(var input_lidar)"/>
+            <arg name="output_pointcloud" value="concatenated/pointcloud"/>
+          </include>
+        </push-ros-namespace>
+      </group>
+
+    </push-ros-namespace>
+  </group>
+</launch>

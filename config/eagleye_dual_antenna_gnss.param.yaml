@@ -1,0 +1,232 @@
+# Eagleye双天线GNSS详细配置参数
+/**:
+  ros__parameters:
+    # 基本配置
+    use_gnss_ins_orientation: true
+    use_multi_antenna_mode: true
+    use_rtk_heading: true
+    use_rtk_dead_reckoning: false
+    enable_additional_rolling: false
+    
+    # 输入话题配置
+    input_topics:
+      gnss_fix: "/fix"
+      gnss_orientation: "/autoware_orientation"
+      imu: "/sensing/imu/imu_data"
+      velocity: "/localization/gyro_odometer/twist_with_covariance"
+    
+    # 输出话题配置
+    output_topics:
+      pose_with_covariance: "/localization/pose_estimator/eagleye/pose_with_covariance"
+      twist_with_covariance: "/localization/twist_estimator/eagleye/twist_with_covariance"
+      geo_pose_with_covariance: "/localization/eagleye/geo_pose_with_covariance"
+    
+    # GNSS配置
+    gnss:
+      # 双天线模式
+      dual_antenna_mode: true
+      # 天线间距 (米)
+      antenna_baseline: 1.0
+      # 航向角精度阈值 (度)
+      heading_accuracy_threshold: 0.5
+      # RTK状态要求
+      rtk_status_required: true
+      # 位置精度阈值 (米)
+      position_accuracy_threshold: 1.0
+      # GNSS更新频率 (Hz)
+      update_frequency: 10.0
+      # 最小卫星数
+      min_satellites: 6
+      # 位置协方差阈值
+      position_covariance_threshold: 10.0
+    
+    # IMU配置
+    imu:
+      # 陀螺仪偏置估计
+      gyro_bias_estimation: true
+      # 加速度计偏置估计
+      accel_bias_estimation: true
+      # 陀螺仪噪声标准差 (rad/s)
+      gyro_noise_std: 0.01
+      # 加速度计噪声标准差 (m/s²)
+      accel_noise_std: 0.1
+      # 陀螺仪偏置噪声标准差 (rad/s)
+      gyro_bias_noise_std: 0.001
+      # 加速度计偏置噪声标准差 (m/s²)
+      accel_bias_noise_std: 0.01
+      # IMU更新频率 (Hz)
+      update_frequency: 100.0
+    
+    # 速度配置
+    velocity:
+      # 速度比例因子估计
+      scale_factor_estimation: true
+      # 速度比例因子初始值
+      scale_factor_initial: 1.0
+      # 速度比例因子标准差
+      scale_factor_std: 0.1
+      # 速度比例因子噪声标准差
+      scale_factor_noise_std: 0.01
+      # 速度更新频率 (Hz)
+      update_frequency: 50.0
+    
+    # 航向配置
+    heading:
+      # 航向角估计方法
+      estimation_method: "dual_antenna"  # "dual_antenna", "gyro_integration", "gnss_velocity"
+      # 航向角平滑
+      smoothing: true
+      # 航向角插值
+      interpolation: true
+      # 航向角精度阈值 (度)
+      accuracy_threshold: 0.1
+      # 航向角更新频率 (Hz)
+      update_frequency: 10.0
+      # 航向角协方差阈值
+      covariance_threshold: 0.1
+      # 双天线基线长度 (米)
+      baseline_length: 1.0
+      # 航向角平滑窗口大小
+      smoothing_window_size: 5
+      # 航向角插值方法
+      interpolation_method: "linear"  # "linear", "cubic", "spline"
+    
+    # 位置配置
+    position:
+      # 位置估计方法
+      estimation_method: "gnss_ins_fusion"
+      # 位置平滑
+      smoothing: true
+      # 位置插值
+      interpolation: true
+      # 高度估计
+      height_estimation: true
+      # 位置更新频率 (Hz)
+      update_frequency: 10.0
+      # 位置协方差阈值
+      covariance_threshold: 10.0
+      # 位置平滑窗口大小
+      smoothing_window_size: 5
+      # 位置插值方法
+      interpolation_method: "linear"
+    
+    # 轨迹配置
+    trajectory:
+      # 轨迹平滑
+      smoothing: true
+      # 轨迹插值
+      interpolation: true
+      # 轨迹预测
+      prediction: false
+      # 轨迹更新频率 (Hz)
+      update_frequency: 10.0
+      # 轨迹长度限制
+      max_trajectory_length: 1000
+      # 轨迹点间隔 (米)
+      trajectory_point_interval: 0.1
+    
+    # 监控配置
+    monitor:
+      # 启用监控
+      enabled: true
+      # 监控频率 (Hz)
+      frequency: 10.0
+      # 状态检查
+      status_check: true
+      # 性能监控
+      performance_monitor: true
+      # 健康检查
+      health_check: true
+      # 监控超时时间 (秒)
+      timeout: 5.0
+    
+    # 调试配置
+    debug:
+      # 启用调试输出
+      enabled: true
+      # 调试级别
+      level: "info"  # "debug", "info", "warn", "error"
+      # 保存调试数据
+      save_data: true
+      # 调试数据路径
+      data_path: "/tmp/eagleye_debug"
+      # 调试数据保存频率 (Hz)
+      save_frequency: 1.0
+      # 调试数据格式
+      data_format: "bag"  # "bag", "csv", "json"
+    
+    # 坐标系配置
+    frames:
+      # 地图坐标系
+      map_frame: "map"
+      # 车辆坐标系
+      base_frame: "base_link"
+      # GNSS天线坐标系
+      gnss_frame: "gnss_antenna"
+      # IMU坐标系
+      imu_frame: "imu_link"
+      # 里程计坐标系
+      odom_frame: "odom"
+    
+    # 滤波器配置
+    filter:
+      # 卡尔曼滤波器
+      kalman_filter:
+        # 过程噪声协方差
+        process_noise:
+          position: 0.1
+          velocity: 0.1
+          attitude: 0.01
+          gyro_bias: 0.001
+          accel_bias: 0.001
+          scale_factor: 0.01
+        # 测量噪声协方差
+        measurement_noise:
+          gnss_position: 1.0
+          gnss_heading: 0.1
+          imu_gyro: 0.01
+          imu_accel: 0.1
+          velocity: 0.1
+        # 滤波器更新频率 (Hz)
+        update_frequency: 100.0
+        # 滤波器收敛阈值
+        convergence_threshold: 0.001
+        # 滤波器最大迭代次数
+        max_iterations: 10
+    
+    # 数据融合配置
+    fusion:
+      # 融合方法
+      method: "ekf"  # "ekf", "ukf", "particle_filter"
+      # 融合权重
+      weights:
+        gnss_position: 0.8
+        gnss_heading: 0.9
+        imu: 0.7
+        velocity: 0.6
+      # 融合阈值
+      thresholds:
+        position: 1.0
+        heading: 0.1
+        velocity: 0.5
+      # 融合频率 (Hz)
+      frequency: 50.0
+    
+    # 质量控制配置
+    quality_control:
+      # 启用质量控制
+      enabled: true
+      # 数据有效性检查
+      validity_check: true
+      # 异常值检测
+      outlier_detection: true
+      # 数据一致性检查
+      consistency_check: true
+      # 质量阈值
+      thresholds:
+        position_accuracy: 1.0
+        heading_accuracy: 0.5
+        velocity_accuracy: 0.5
+        imu_quality: 0.8
+      # 质量检查频率 (Hz)
+      check_frequency: 10.0
