@@ -1,0 +1,113 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 参数配置 -->
+  <arg name="pose_source" default="ndt" description="定位源：ndt, yabloc, artag, eagleye, lidar-marker"/>
+  <arg name="twist_source" default="gyro_odom" description="速度源：gyro_odom, eagleye"/>
+  <arg name="initial_pose" default="[]" description="初始位姿 [x, y, z, qx, qy, qz, qw]"/>
+  <arg name="system_run_mode" default="online" description="系统运行模式：online, logging_simulation"/>
+  <arg name="gnss_enabled" default="true" description="启用GNSS初始位置估计"/>
+
+  <!-- 参数文件路径 -->
+  <arg name="ndt_scan_matcher_param_path" default="$(find-pkg-share autoware_ndt_scan_matcher)/config/ndt_scan_matcher.param.yaml"/>
+  <arg name="ekf_localizer_param_path" default="$(find-pkg-share autoware_ekf_localizer)/config/ekf_localizer.param.yaml"/>
+  <arg name="pose_initializer_param_path" default="$(find-pkg-share autoware_pose_initializer)/config/pose_initializer.param.yaml"/>
+
+  <!-- 传感器数据话题 -->
+  <arg name="input_pointcloud" default="/sensing/lidar/concatenated/pointcloud"/>
+  <arg name="input_imu" default="/sensing/imu/imu_data"/>
+  <arg name="input_odom" default="/localization/gyro_odometer/twist_with_covariance"/>
+  <arg name="input_gnss_fix" default="/fix"/>
+  <arg name="input_gnss_orientation" default="/autoware_orientation"/>
+
+  <!-- 输出话题 -->
+  <arg name="output_pose" default="/localization/pose_estimator/pose"/>
+  <arg name="output_pose_cov" default="/localization/pose_estimator/pose_with_covariance"/>
+  <arg name="output_twist" default="/localization/twist_estimator/twist_with_covariance"/>
+
+  <!-- 定位模块 -->
+  <group>
+    <push-ros-namespace namespace="localization">
+      
+      <!-- GNSS Poser (双天线GNSS定位) -->
+      <group>
+        <push-ros-namespace namespace="gnss">
+          <include file="$(find-pkg-share autoware_gnss_poser)/launch/gnss_poser_dual_antenna.launch.xml">
+            <arg name="input_topic_fix" value="$(var input_gnss_fix)"/>
+            <arg name="input_topic_orientation" value="$(var input_gnss_orientation)"/>
+            <arg name="output_topic_gnss_pose" value="gnss_pose"/>
+            <arg name="output_topic_gnss_pose_cov" value="gnss_pose_cov"/>
+            <arg name="output_topic_gnss_fixed" value="gnss_fixed"/>
+          </include>
+        </push-ros-namespace>
+      </group>
+
+      <!-- 位姿估计器 -->
+      <group>
+        <push-ros-namespace namespace="pose_estimator">
+          
+          <!-- NDT扫描匹配器 -->
+          <group if="$(eval &quot;'$(var pose_source)'=='ndt'&quot;)">
+            <include file="$(find-pkg-share autoware_ndt_scan_matcher)/launch/ndt_scan_matcher.launch.xml">
+              <arg name="input_pointcloud" value="$(var input_pointcloud)"/>
+              <arg name="output_pose_with_covariance" value="pose_with_covariance"/>
+              <arg name="param_file" value="$(var ndt_scan_matcher_param_path)"/>
+            </include>
+          </group>
+
+          <!-- 位姿估计仲裁器 (多定位源融合) -->
+          <group if="$(eval &quot;'$(var pose_source)'=='ndt' and '$(var gnss_enabled)'=='true'&quot;)">
+            <include file="$(find-pkg-share autoware_pose_estimator_arbiter)/launch/pose_estimator_arbiter.launch.xml">
+              <arg name="pose_sources" value="['ndt', 'gnss']"/>
+              <arg name="input_pointcloud" value="$(var input_pointcloud)"/>
+            </include>
+          </group>
+        </push-ros-namespace>
+      </group>
+
+      <!-- 速度估计器 -->
+      <group>
+        <push-ros-namespace namespace="twist_estimator">
+          
+          <!-- 陀螺仪里程计 -->
+          <group if="$(eval &quot;'$(var twist_source)'=='gyro_odom'&quot;)">
+            <include file="$(find-pkg-share autoware_gyro_odometer)/launch/gyro_odometer.launch.xml">
+              <arg name="input_imu" value="$(var input_imu)"/>
+              <arg name="input_odom" value="$(var input_odom)"/>
+              <arg name="output_twist_with_covariance" value="twist_with_covariance"/>
+            </include>
+          </group>
+        </push-ros-namespace>
+      </group>
+
+      <!-- EKF定位器 (融合所有传感器数据) -->
+      <group>
+        <push-ros-namespace namespace="pose_twist_fusion_filter">
+          <include file="$(find-pkg-share autoware_ekf_localizer)/launch/ekf_localizer.launch.xml">
+            <arg name="input_pose_with_cov_name" value="/localization/pose_estimator/pose_with_covariance"/>
+            <arg name="input_twist_with_cov_name" value="/localization/twist_estimator/twist_with_covariance"/>
+            <arg name="output_pose_name" value="$(var output_pose)"/>
+            <arg name="output_pose_with_covariance_name" value="$(var output_pose_cov)"/>
+            <arg name="output_twist_name" value="$(var output_twist)"/>
+            <arg name="param_file" value="$(var ekf_localizer_param_path)"/>
+          </include>
+        </push-ros-namespace>
+      </group>
+
+      <!-- 位姿初始化器 -->
+      <group>
+        <push-ros-namespace namespace="util">
+          <include file="$(find-pkg-share autoware_pose_initializer)/launch/pose_initializer.launch.xml">
+            <arg name="user_defined_initial_pose/enable" value="$(eval &quot;len($(var initial_pose)) == 7&quot;)"/>
+            <arg name="user_defined_initial_pose/pose" value="$(var initial_pose)"/>
+            <arg name="ndt_enabled" value="$(eval &quot;'$(var pose_source)'=='ndt'&quot;)"/>
+            <arg name="gnss_enabled" value="$(var gnss_enabled)"/>
+            <arg name="ekf_enabled" value="true"/>
+            <arg name="config_file" value="$(var pose_initializer_param_path)"/>
+            <arg name="sub_gnss_pose_cov" value="/localization/gnss/gnss_pose_cov"/>
+          </include>
+        </push-ros-namespace>
+      </group>
+
+    </push-ros-namespace>
+  </group>
+</launch>
