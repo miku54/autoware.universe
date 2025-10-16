@@ -1,0 +1,95 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 调试参数 -->
+  <arg name="debug_mode" default="true" description="启用调试模式"/>
+  <arg name="save_debug_data" default="true" description="保存调试数据"/>
+  <arg name="debug_data_path" default="/tmp/eagleye_debug" description="调试数据保存路径"/>
+  <arg name="log_level" default="debug" description="日志级别"/>
+  
+  <!-- 传感器话题 -->
+  <arg name="input_gnss_fix" default="/fix"/>
+  <arg name="input_gnss_orientation" default="/autoware_orientation"/>
+  <arg name="input_imu" default="/sensing/imu/imu_data"/>
+  <arg name="input_velocity" default="/localization/gyro_odometer/twist_with_covariance"/>
+  
+  <!-- 输出话题 -->
+  <arg name="output_pose_with_covariance" default="/localization/pose_estimator/eagleye/pose_with_covariance"/>
+  <arg name="output_twist_with_covariance" default="/localization/twist_estimator/eagleye/twist_with_covariance"/>
+
+  <!-- 创建调试数据目录 -->
+  <node pkg="topic_tools" exec="relay" name="create_debug_dir" if="$(var save_debug_data)">
+    <param name="command" value="mkdir -p $(var debug_data_path)"/>
+  </node>
+
+  <!-- Eagleye双天线GNSS定位 -->
+  <include file="$(find-pkg-share eagleye_rt)/launch/eagleye_dual_antenna_gnss.launch.xml">
+    <arg name="use_eagleye_pose" value="true"/>
+    <arg name="use_eagleye_twist" value="true"/>
+    <arg name="use_multi_antenna_mode" value="true"/>
+    <arg name="use_rtk_heading" value="true"/>
+    <arg name="input_gnss_fix" value="$(var input_gnss_fix)"/>
+    <arg name="input_gnss_orientation" value="$(var input_gnss_orientation)"/>
+    <arg name="input_imu" value="$(var input_imu)"/>
+    <arg name="input_velocity" value="$(var input_velocity)"/>
+    <arg name="output_pose_with_covariance" value="$(var output_pose_with_covariance)"/>
+    <arg name="output_twist_with_covariance" value="$(var output_twist_with_covariance)"/>
+  </include>
+
+  <!-- 调试工具 -->
+  <group if="$(var debug_mode)">
+    
+    <!-- 话题监控 -->
+    <node pkg="rqt_topic" exec="rqt_topic" name="topic_monitor" output="screen"/>
+    
+    <!-- 节点图监控 -->
+    <node pkg="rqt_graph" exec="rqt_graph" name="node_graph" output="screen"/>
+    
+    <!-- 位姿可视化 -->
+    <node pkg="rviz2" exec="rviz2" name="eagleye_debug_rviz" output="screen">
+      <param name="config_file" value="$(find-pkg-share eagleye_rt)/config/eagleye_debug.rviz"/>
+    </node>
+    
+    <!-- 数据记录 -->
+    <group if="$(var save_debug_data)">
+      <node pkg="rosbag2" exec="record" name="eagleye_debug_recorder" output="screen">
+        <param name="output_dir" value="$(var debug_data_path)"/>
+        <param name="topics" value="
+          $(var input_gnss_fix)
+          $(var input_gnss_orientation)
+          $(var input_imu)
+          $(var input_velocity)
+          $(var output_pose_with_covariance)
+          $(var output_twist_with_covariance)
+          /localization/eagleye/geo_pose_with_covariance
+          /tf
+          /tf_static
+        "/>
+      </node>
+    </group>
+    
+    <!-- 性能监控 -->
+    <node pkg="rqt_plot" exec="rqt_plot" name="performance_plot" output="screen">
+      <param name="topics" value="
+        $(var output_pose_with_covariance)/pose/position/x
+        $(var output_pose_with_covariance)/pose/position/y
+        $(var output_pose_with_covariance)/pose/position/z
+      "/>
+    </node>
+    
+    <!-- 航向角监控 -->
+    <node pkg="rqt_plot" exec="rqt_plot" name="heading_plot" output="screen">
+      <param name="topics" value="
+        $(var input_gnss_orientation)/orientation/orientation/z
+        $(var input_gnss_orientation)/orientation/orientation/w
+      "/>
+    </node>
+    
+  </group>
+
+  <!-- 调试信息发布 -->
+  <node pkg="eagleye_rt" exec="debug_info_publisher" name="debug_info_publisher" output="screen" if="$(var debug_mode)">
+    <param name="debug_data_path" value="$(var debug_data_path)"/>
+    <param name="publish_frequency" value="10.0"/>
+  </node>
+
+</launch>

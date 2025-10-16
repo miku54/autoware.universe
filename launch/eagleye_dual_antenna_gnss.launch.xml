@@ -1,0 +1,230 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 参数配置 -->
+  <arg name="eagleye_param_path" default="$(find-pkg-share eagleye_rt)/config/eagleye_dual_antenna_gnss.param.yaml"/>
+  <arg name="use_eagleye_pose" default="true" description="启用Eagleye位姿估计"/>
+  <arg name="use_eagleye_twist" default="true" description="启用Eagleye速度估计"/>
+  <arg name="use_multi_antenna_mode" default="true" description="启用多天线模式"/>
+  <arg name="use_rtk_heading" default="true" description="启用RTK航向"/>
+  <arg name="use_rtk_dead_reckoning" default="false" description="启用RTK航位推算"/>
+  <arg name="enable_additional_rolling" default="false" description="启用额外滚动"/>
+  
+  <!-- 输入话题 -->
+  <arg name="input_gnss_fix" default="/fix"/>
+  <arg name="input_gnss_orientation" default="/autoware_orientation"/>
+  <arg name="input_imu" default="/sensing/imu/imu_data"/>
+  <arg name="input_velocity" default="/localization/gyro_odometer/twist_with_covariance"/>
+  
+  <!-- 输出话题 -->
+  <arg name="output_pose_with_covariance" default="/localization/pose_estimator/eagleye/pose_with_covariance"/>
+  <arg name="output_twist_with_covariance" default="/localization/twist_estimator/eagleye/twist_with_covariance"/>
+  <arg name="output_geo_pose_with_covariance" default="/localization/eagleye/geo_pose_with_covariance"/>
+
+  <!-- Eagleye定位系统 -->
+  <group>
+    <push-ros-namespace namespace="localization">
+      
+      <!-- Eagleye主节点 -->
+      <group>
+        <push-ros-namespace namespace="eagleye">
+          
+          <!-- 速度中继 -->
+          <group if="$(var use_eagleye_twist)">
+            <node pkg="topic_tools" exec="relay" name="eagleye_output_twist_relay" 
+                  args="twist_with_covariance $(var output_twist_with_covariance)"/>
+          </group>
+
+          <!-- Eagleye核心节点 -->
+          <node pkg="eagleye_rt" name="twist_relay" exec="twist_relay">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <node pkg="eagleye_rt" name="tf_converted_imu" exec="tf_converted_imu">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <!-- 速度比例因子估计 -->
+          <node pkg="eagleye_rt" name="velocity_scale_factor_node" exec="velocity_scale_factor">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+            <param name="velocity_scale_factor_save_str" value="$(find-pkg-share eagleye_rt)/config/velocity_scale_factor.txt"/>
+          </node>
+
+          <!-- 偏航角偏置估计 -->
+          <node pkg="eagleye_rt" name="yaw_rate_offset_stop_node" exec="yaw_rate_offset_stop">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <node pkg="eagleye_rt" name="yaw_rate_offset_node_1st" exec="yaw_rate_offset" args="1st">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <node pkg="eagleye_rt" name="yaw_rate_offset_node_2nd" exec="yaw_rate_offset" args="2nd">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <!-- 航向角估计 (双天线模式) -->
+          <group if="$(var use_multi_antenna_mode)">
+            <node pkg="eagleye_rt" name="heading_node_1st" exec="heading" args="1st" if="$(eval &quot;'$(var use_rtk_heading)'=='false'&quot;)">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+              <param name="use_multi_antenna_mode" value="$(var use_multi_antenna_mode)"/>
+            </node>
+
+            <node pkg="eagleye_rt" name="heading_node_2nd" exec="heading" args="2nd" if="$(eval &quot;'$(var use_rtk_heading)'=='false'&quot;)">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+              <param name="use_multi_antenna_mode" value="$(var use_multi_antenna_mode)"/>
+            </node>
+
+            <node pkg="eagleye_rt" name="heading_node_3rd" exec="heading" args="3rd" if="$(eval &quot;'$(var use_rtk_heading)'=='false'&quot;)">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+              <param name="use_multi_antenna_mode" value="$(var use_multi_antenna_mode)"/>
+            </node>
+          </group>
+
+          <!-- 航向角插值 -->
+          <node pkg="eagleye_rt" name="heading_interpolate_node_1st" exec="heading_interpolate" args="1st">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <node pkg="eagleye_rt" name="heading_interpolate_node_2nd" exec="heading_interpolate" args="2nd">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <node pkg="eagleye_rt" name="heading_interpolate_node_3rd" exec="heading_interpolate" args="3rd">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <!-- 侧滑角估计 -->
+          <node pkg="eagleye_rt" name="slip_angle_node" exec="slip_angle">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <!-- 距离估计 -->
+          <node pkg="eagleye_rt" name="distance_node" exec="distance">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <!-- 轨迹估计 -->
+          <node pkg="eagleye_rt" name="trajectory_node" exec="trajectory">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <!-- RTK航位推算 -->
+          <node pkg="eagleye_rt" name="rtk_dead_reckoning" exec="rtk_dead_reckoning" if="$(var use_rtk_dead_reckoning)">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <!-- RTK航向角估计 -->
+          <node pkg="eagleye_rt" name="rtk_heading_node_1st" exec="rtk_heading" args="1st" if="$(var use_rtk_heading)">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <node pkg="eagleye_rt" name="rtk_heading_node_2nd" exec="rtk_heading" args="2nd" if="$(var use_rtk_heading)">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <!-- 位姿估计节点 -->
+          <group if="$(var use_eagleye_pose)">
+            <!-- 位置估计 -->
+            <node pkg="eagleye_rt" name="position_node" exec="position" if="$(eval &quot;'$(var use_rtk_dead_reckoning)'=='false'&quot;)">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+            </node>
+
+            <!-- 位置插值 -->
+            <node pkg="eagleye_rt" name="position_interpolate_node" exec="position_interpolate" if="$(eval &quot;'$(var use_rtk_dead_reckoning)'=='false'&quot;)">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+            </node>
+
+            <!-- 平滑处理 -->
+            <node pkg="eagleye_rt" name="smoothing_node" exec="smoothing">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+            </node>
+
+            <!-- 高度估计 -->
+            <node pkg="eagleye_rt" name="height_node" exec="height">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+            </node>
+
+            <!-- 角速度偏置停止 -->
+            <node pkg="eagleye_rt" name="angular_velocity_offset_stop_node" exec="angular_velocity_offset_stop">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+            </node>
+
+            <!-- IMU校正 -->
+            <node pkg="eagleye_rt" name="correction_imu" exec="correction_imu">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+            </node>
+
+            <!-- 滚动估计 -->
+            <node pkg="eagleye_rt" name="rolling" exec="rolling">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+            </node>
+
+            <!-- 额外滚动估计 -->
+            <node pkg="eagleye_rt" name="enable_additional_rolling" exec="enable_additional_rolling" if="$(var enable_additional_rolling)">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+            </node>
+
+            <!-- RTK航向角估计 (第三级) -->
+            <node pkg="eagleye_rt" name="rtk_heading_node_3rd" exec="rtk_heading" args="3rd" if="$(var use_rtk_heading)">
+              <param from="$(var eagleye_param_path)"/>
+              <param name="yaml_file" value="$(var eagleye_param_path)"/>
+            </node>
+          </group>
+
+          <!-- 监控节点 -->
+          <node pkg="eagleye_rt" name="monitor" exec="monitor">
+            <param from="$(var eagleye_param_path)"/>
+            <param name="yaml_file" value="$(var eagleye_param_path)"/>
+          </node>
+
+          <!-- GNSS转换器 -->
+          <include file="$(find-pkg-share tier4_localization_launch)/launch/pose_twist_estimator/eagleye/gnss_converter.launch.xml">
+            <arg name="config_path" value="$(var eagleye_param_path)"/>
+          </include>
+
+        </push-ros-namespace>
+      </group>
+
+      <!-- 地理位姿融合 -->
+      <group if="$(var use_eagleye_pose)">
+        <arg name="geo_pose_topic_name" default="eagleye/geo_pose_with_covariance"/>
+        <include file="$(find-pkg-share eagleye_geo_pose_fusion)/launch/geo_pose_fusion.launch.xml">
+          <arg name="output_geo_pose" value="$(var geo_pose_topic_name)"/>
+        </include>
+        
+        <!-- 地理位姿投影器 -->
+        <include file="$(find-pkg-share autoware_geo_pose_projector)/launch/geo_pose_projector.launch.xml">
+          <arg name="input_geo_pose" value="$(var geo_pose_topic_name)"/>
+          <arg name="output_pose" value="$(var output_pose_with_covariance)"/>
+        </include>
+      </group>
+
+    </push-ros-namespace>
+  </group>
+</launch>
